@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 const DISCORD_ID = '1019243841498394654';
 
@@ -73,22 +73,14 @@ export interface DiscordProfile {
 export const useLanyard = () => {
   const [data, setData] = useState<LanyardData | null>(null);
   const [profile, setProfile] = useState<DiscordProfile | null>(null);
+  
+  // Refs to manage connection state
+  const socketRef = useRef<WebSocket | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Fetch static profile data (Bio, Banner, Badges)
   useEffect(() => {
-    // 1. Fetch Basic Lanyard Data
-    const fetchLanyard = async () => {
-      try {
-        const response = await fetch(`https://api.lanyard.rest/v1/users/${DISCORD_ID}`);
-        const json = await response.json();
-        if (json.success && json.data) {
-          setData(json.data);
-        }
-      } catch (error) {
-        console.error("Lanyard fetch failed:", error);
-      }
-    };
-
-    // 2. Fetch Extended Profile Data (Bio, Banner, Badges)
     const fetchProfile = async () => {
       try {
         // Using dcdn.dstn.to as a proxy to get public profile data
@@ -102,14 +94,22 @@ export const useLanyard = () => {
       }
     };
 
-    fetchLanyard();
     fetchProfile();
+  }, []);
 
-    // 3. WebSocket Connection for Realtime Presence
+  const connect = useCallback(() => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) return;
+
+    // Clear any pending reconnect attempts
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+
+    console.log("Connecting to Lanyard WebSocket...");
     const socket = new WebSocket('wss://api.lanyard.rest/socket');
-    let heartbeatInterval: ReturnType<typeof setInterval>;
+    socketRef.current = socket;
 
     socket.onopen = () => {
+      console.log("Lanyard WebSocket Connected");
+      // Subscribe to ID
       socket.send(JSON.stringify({
         op: 2,
         d: { subscribe_to_id: DISCORD_ID }
@@ -127,7 +127,14 @@ export const useLanyard = () => {
       // Handle Heartbeat Hello
       if (message.op === 1) {
         const interval = message.d.heartbeat_interval;
-        heartbeatInterval = setInterval(() => {
+        
+        // Clear previous heartbeat if exists
+        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+        
+        // Send initial heartbeat immediately (optional but good practice)
+        // socket.send(JSON.stringify({ op: 3 })); 
+
+        heartbeatIntervalRef.current = setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) {
              socket.send(JSON.stringify({ op: 3 }));
           }
@@ -135,15 +142,32 @@ export const useLanyard = () => {
       }
     };
 
-    socket.onclose = () => {
-      if (heartbeatInterval) clearInterval(heartbeatInterval);
+    socket.onclose = (event) => {
+      console.log("Lanyard WebSocket Closed:", event.code, event.reason);
+      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+      
+      // Automatic Reconnect
+      reconnectTimeoutRef.current = setTimeout(() => {
+        connect();
+      }, 3000); // Retry after 3 seconds
     };
 
-    return () => {
-      if (heartbeatInterval) clearInterval(heartbeatInterval);
+    socket.onerror = (error) => {
+      console.error("Lanyard WebSocket Error:", error);
       socket.close();
     };
+
   }, []);
+
+  useEffect(() => {
+    connect();
+
+    return () => {
+      if (socketRef.current) socketRef.current.close();
+      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    };
+  }, [connect]);
 
   return { lanyard: data, profile };
 };
