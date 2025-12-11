@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Send, CheckCircle2, Film, Tv, Gamepad2, X, MessageSquare, AlertCircle } from 'lucide-react';
+import { Plus, Send, CheckCircle2, Film, Tv, Gamepad2, X, MessageSquare, AlertCircle, User } from 'lucide-react';
 
 const SuggestionBox: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -8,6 +8,7 @@ const SuggestionBox: React.FC = () => {
   
   // Form Data
   const [formData, setFormData] = useState({
+    name: '',
     movie: '',
     show: '',
     game: '',
@@ -22,7 +23,7 @@ const SuggestionBox: React.FC = () => {
   };
 
   const resetForm = () => {
-    setFormData({ movie: '', show: '', game: '', message: '' });
+    setFormData({ name: '', movie: '', show: '', game: '', message: '' });
     setStatus('idle');
   };
 
@@ -31,6 +32,9 @@ const SuggestionBox: React.FC = () => {
     
     const payload: any = {};
     
+    // Optional Name
+    if (formData.name.trim()) payload.name = formData.name;
+
     // Collect Suggestions
     if (formData.movie.trim()) payload.movie = formData.movie;
     if (formData.show.trim()) payload.tv_show = formData.show;
@@ -190,6 +194,20 @@ const SuggestionBox: React.FC = () => {
 
                     {/* Form Fields */}
                     <div className="space-y-4 min-h-[180px]">
+                        {/* Optional Name */}
+                        <div className="relative group">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <User className="w-4 h-4 text-gray-500 group-focus-within:text-white transition-colors" />
+                            </div>
+                            <input 
+                                name="name"
+                                value={formData.name}
+                                onChange={handleInputChange}
+                                type="text" 
+                                placeholder="Your name (optional)"
+                                className="w-full bg-black/20 border border-white/10 rounded-xl pl-11 pr-4 py-3.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-white/40 focus:bg-white/[0.03] transition-all"
+                            />
+                        </div>
                         <AnimatePresence mode="wait">
                             {activeTab === 'suggest' ? (
                                 <motion.div
@@ -252,6 +270,37 @@ const SuggestionBox: React.FC = () => {
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -10 }}
                                 >
+                                    {([formData.movie, formData.show, formData.game].some(v => v.trim())) && (
+                                        <div className="mb-4 bg-white/[0.03] border border-white/10 rounded-xl p-4">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-[#FF4655] animate-pulse" />
+                                                <p className="text-xs text-gray-300 font-bold uppercase tracking-widest">You will also send your suggestions</p>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {formData.movie.trim() && (
+                                                    <div className="flex items-center gap-2 text-sm text-white">
+                                                        <Film className="w-4 h-4 text-yellow-400" />
+                                                        <span className="font-medium">Movie:</span>
+                                                        <span className="text-gray-300 truncate">{formData.movie}</span>
+                                                    </div>
+                                                )}
+                                                {formData.show.trim() && (
+                                                    <div className="flex items-center gap-2 text-sm text-white">
+                                                        <Tv className="w-4 h-4 text-blue-400" />
+                                                        <span className="font-medium">TV Show:</span>
+                                                        <span className="text-gray-300 truncate">{formData.show}</span>
+                                                    </div>
+                                                )}
+                                                {formData.game.trim() && (
+                                                    <div className="flex items-center gap-2 text-sm text-white">
+                                                        <Gamepad2 className="w-4 h-4 text-[#FF4655]" />
+                                                        <span className="font-medium">Game:</span>
+                                                        <span className="text-gray-300 truncate">{formData.game}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                     <textarea 
                                         name="message"
                                         value={formData.message}
