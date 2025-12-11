@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, X, Send, Sparkles, Loader2, Bot } from 'lucide-react';
+import { MessageSquare, X, Send, Sparkles, Loader2, Bot, AlertTriangle } from 'lucide-react';
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 
 // Optimized System Prompt (Removed excessive formatting for lower token count/faster processing)
@@ -89,7 +89,7 @@ If personal question -> "Ask Saad directly."
 
 interface Message {
   id: string;
-  role: 'user' | 'model';
+  role: 'user' | 'model' | 'error';
   text: string;
 }
 
@@ -100,29 +100,34 @@ const ChatBot: React.FC = () => {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [chatSession, setChatSession] = useState<Chat | null>(null);
   const [showTooltip, setShowTooltip] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Google GenAI Chat Session
+  const [chatSession, setChatSession] = useState<Chat | null>(null);
+  const [apiError, setApiError] = useState(false);
 
   useEffect(() => {
-    // Initialize Gemini Chat
-    try {
-        if (process.env.API_KEY) {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const chat = ai.chats.create({
-                model: 'gemini-3-pro-preview',
-                config: {
-                    systemInstruction: SYSTEM_PROMPT,
-                },
-            });
-            setChatSession(chat);
-        } else {
-            console.error("API_KEY is missing");
-        }
-    } catch (e) {
-        console.error("Failed to initialize AI", e);
-    }
-  }, []);
+  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+  if (!apiKey) {
+    console.error("VITE_GOOGLE_API_KEY is missing. Please add it to .env and restart.");
+    setApiError(true);
+    return;
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const chat = ai.chats.create({
+      model: 'gemini-3-pro-preview',
+      config: { systemInstruction: SYSTEM_PROMPT },
+    });
+    setChatSession(chat);
+  } catch (err) {
+    console.error("Failed to initialize Gemini:", err);
+    setApiError(true);
+  }
+}, []);
+
 
   // Show tooltip after a delay
   useEffect(() => {
@@ -144,7 +149,7 @@ const ChatBot: React.FC = () => {
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!inputValue.trim() || !chatSession) return;
+    if (!inputValue.trim()) return;
 
     const userText = inputValue.trim();
     setInputValue('');
@@ -152,6 +157,18 @@ const ChatBot: React.FC = () => {
     // Add user message
     setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', text: userText }]);
     setIsTyping(true);
+
+    if (apiError || !chatSession) {
+         setTimeout(() => {
+            setMessages(prev => [...prev, { 
+                id: Date.now().toString(), 
+                role: 'error', 
+                text: "My brain is disconnected (API Key missing). Check console." 
+            }]);
+            setIsTyping(false);
+         }, 500);
+         return;
+    }
 
     try {
         const result = await chatSession.sendMessageStream({ message: userText });
@@ -177,12 +194,12 @@ const ChatBot: React.FC = () => {
             }
         }
     } catch (error) {
-        console.error("Chat Error:", error);
+        console.error("Gemini Error:", error);
         setIsTyping(false);
         setMessages(prev => [...prev, { 
             id: (Date.now() + 1).toString(), 
-            role: 'model', 
-            text: "My brain is lagging rn. Try again later." 
+            role: 'error', 
+            text: "Connection interrupted. Try again later." 
         }]);
     } finally {
         setIsTyping(false);
@@ -276,8 +293,8 @@ const ChatBot: React.FC = () => {
                                     <Sparkles className="w-3 h-3 text-[#FF4655]" />
                                 </h3>
                                 <div className="flex items-center gap-1.5">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                    <span className="text-[10px] text-gray-400 font-mono uppercase">Online</span>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${apiError ? 'bg-red-500' : 'bg-green-500'} animate-pulse`} />
+                                    <span className="text-[10px] text-gray-400 font-mono uppercase">{apiError ? 'System Offline' : 'Online'}</span>
                                 </div>
                             </div>
                         </div>
@@ -296,9 +313,12 @@ const ChatBot: React.FC = () => {
                                     className={`max-w-[80%] p-3 rounded-2xl text-sm leading-relaxed ${
                                         msg.role === 'user' 
                                         ? 'bg-[#FF4655] text-white rounded-tr-sm shadow-[0_4px_15px_rgba(255,70,85,0.3)]' 
-                                        : 'bg-white/10 text-gray-200 rounded-tl-sm border border-white/5'
+                                        : msg.role === 'error'
+                                            ? 'bg-red-500/10 text-red-400 border border-red-500/20 rounded-tl-sm'
+                                            : 'bg-white/10 text-gray-200 rounded-tl-sm border border-white/5'
                                     }`}
                                 >
+                                    {msg.role === 'error' && <AlertTriangle className="w-4 h-4 mb-1" />}
                                     {msg.text}
                                 </div>
                             </motion.div>
@@ -327,18 +347,19 @@ const ChatBot: React.FC = () => {
                                 type="text"
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
-                                placeholder="Ask me anything..."
-                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-4 pr-12 py-3 text-sm text-white focus:outline-none focus:border-[#FF4655]/50 focus:bg-white/10 transition-all placeholder:text-gray-600"
+                                placeholder={apiError ? "System Offline" : "Ask me anything..."}
+                                disabled={apiError}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-4 pr-12 py-3 text-sm text-white focus:outline-none focus:border-[#FF4655]/50 focus:bg-white/10 transition-all placeholder:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <button
                                 type="submit"
-                                disabled={!inputValue.trim() || isTyping}
+                                disabled={!inputValue.trim() || isTyping || apiError}
                                 className="absolute right-2 p-1.5 bg-[#FF4655] rounded-lg text-white hover:bg-[#ff5f6d] disabled:opacity-50 disabled:hover:bg-[#FF4655] transition-colors"
                             >
                                 {isTyping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                             </button>
                         </div>
-                        <div className="text-[10px] text-center text-gray-600 mt-2 font-mono">
+                         <div className="text-[10px] text-center text-gray-600 mt-2 font-mono">
                             AI can make mistakes. Check with real Chuipala.
                         </div>
                     </form>

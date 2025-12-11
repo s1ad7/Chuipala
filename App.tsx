@@ -14,7 +14,7 @@ import { useLanyard } from './hooks/useLanyard';
 
 const App: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
-  const [volume, setVolume] = useState(0.4);
+  const [volume, setVolume] = useState(0.15);
   const [isLoading, setIsLoading] = useState(true);
   const audioRef = useRef<HTMLAudioElement>(null);
   const { lanyard, profile } = useLanyard();
