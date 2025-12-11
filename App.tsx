@@ -106,7 +106,10 @@ const App: React.FC = () => {
       <audio 
         ref={audioRef} 
         loop 
-        src="https://cdn.pixabay.com/download/audio/2022/11/22/audio_febc508520.mp3?filename=cyberpunk-2099-11893.mp3" 
+        muted={isMuted}
+        preload="auto"
+        playsInline
+        src="/Gibran Alcocer - Idea 10.mp3" 
       />
 
       <AnimatePresence>
@@ -124,7 +127,13 @@ const App: React.FC = () => {
         className="fixed top-6 left-6 z-50 flex items-center bg-black/40 backdrop-blur-md rounded-full border border-white/5 p-1.5 pr-2 transition-all duration-300 hover:bg-black/80 hover:border-white/20 hover:pr-4 group"
       >
         <button
-            onClick={() => setIsMuted(!isMuted)}
+            onClick={() => {
+                const next = !isMuted;
+                setIsMuted(next);
+                if (!next && audioRef.current) {
+                    audioRef.current.play().catch(() => {});
+                }
+            }}
             className="p-2 rounded-full hover:bg-white/10 transition-colors relative flex-shrink-0"
         >
              {isMuted || volume === 0 ? (
@@ -142,7 +151,13 @@ const App: React.FC = () => {
                 max="1" 
                 step="0.05" 
                 value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
+                onChange={(e) => {
+                    handleVolumeChange(e);
+                    const newVolume = parseFloat(e.target.value);
+                    if (newVolume > 0 && audioRef.current) {
+                        audioRef.current.play().catch(() => {});
+                    }
+                }}
                 className="w-20 h-1 ml-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-[#FF4655] focus:outline-none focus:ring-1 focus:ring-[#FF4655]/50"
             />
         </div>
