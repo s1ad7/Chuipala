@@ -8,7 +8,6 @@ import MusicPlayer from './components/MusicPlayer';
 import Background from './components/Background';
 import Favorites from './components/Favorites';
 import SuggestionBox from './components/SuggestionBox';
-import ChatBot from './components/ChatBot';
 import Loader from './components/Loader';
 import { useLanyard } from './hooks/useLanyard';
 
@@ -234,8 +233,6 @@ const App: React.FC = () => {
         </AnimatePresence>
       </main>
 
-      {/* AI Chat Bot Overlay */}
-      <ChatBot />
       
     </div>
   );
